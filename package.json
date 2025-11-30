@@ -2,14 +2,35 @@
   "name": "chatgpt-electron",
   "version": "0.1.0",
   "description": "Electron wrapper that embeds Chatgpt",
+  "author": "mrunal <mrunaltmeshram@gmail.com>",
   "main": "src/main.js",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder --publish never"
   },
   "dependencies": {
     "electron-store": "^8.2.0"
   },
   "devDependencies": {
-    "electron": "^26.6.10"
+    "electron": "^26.6.10",
+    "electron-builder": "^24.6.0"
+  },
+  "build": {
+    "appId": "com.mrunal.chatgpt",
+    "productName": "ChatGPT Electron",
+    "directories": {
+      "buildResources": "assets",
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "package.json",
+      "assets/**/*"
+    ],
+    "linux": {
+      "target": ["AppImage", "deb"],
+      "category": "Utility"
+    }
   }
 }
