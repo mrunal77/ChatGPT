@@ -1,92 +1,107 @@
-const { app, BrowserWindow, Menu, shell } = require('electron');
+const { app, BrowserWindow, Menu, shell, dialog, nativeImage } = require('electron');
 const path = require('path');
 const fs = require('fs');
-const { nativeImage } = require('electron');
+
+// Basic startup logging and global error handlers to help diagnose freezes/crashes
+console.log('Main process starting', { argv: process.argv.slice(), pid: process.pid, platform: process.platform });
+process.on('uncaughtException', (err) => {
+  console.error('UncaughtException in main process:', err && err.stack ? err.stack : err);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('UnhandledRejection in main process:', reason);
+});
+
+let mainWindow = null;
 
 function createWindow() {
-  // Choose an icon if available. Prefer PNG (cross-platform), fall back to SVG.
-  const assetsDir = path.join(__dirname, '..', 'assets');
-  const pngIcon = path.join(assetsDir, 'icon.png');
-  const svgIcon = path.join(assetsDir, 'icon.svg');
+  try {
+    const assetsDir = path.join(__dirname, '..', 'assets');
+    const pngIcon = path.join(assetsDir, 'icon.png');
 
-  const browserWindowOptions = {
-    width: 1200,
-    height: 800,
-    autoHideMenuBar: true,
-    webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
-      contextIsolation: true,
-      nodeIntegration: false
+    const browserWindowOptions = {
+      width: 1200,
+      height: 800,
+      autoHideMenuBar: true,
+      webPreferences: {
+        preload: path.join(__dirname, 'preload.js'),
+        contextIsolation: true,
+        nodeIntegration: false
+      }
+    };
+
+    if (fs.existsSync(pngIcon)) {
+      browserWindowOptions.icon = pngIcon;
     }
-  };
 
-  if (fs.existsSync(pngIcon)) {
-    browserWindowOptions.icon = pngIcon;
+    const win = new BrowserWindow(browserWindowOptions);
+    win.setMenuBarVisibility(false);
+    win.loadURL('https://chatgpt.com/?embed=1');
+
+    // Add a simple context menu to support copy/cut/paste/select-all
+    win.webContents.on('context-menu', (event, params) => {
+      const template = [];
+      if (params.selectionText && params.selectionText.trim() !== '') {
+        template.push({ label: 'Copy', role: 'copy' });
+      }
+      if (params.isEditable) {
+        template.push({ label: 'Cut', role: 'cut' });
+        template.push({ label: 'Paste', role: 'paste' });
+      }
+      template.push({ type: 'separator' }, { label: 'Select All', role: 'selectAll' });
+      if (template.length > 0) {
+        const menu = Menu.buildFromTemplate(template);
+        menu.popup({ window: win });
+      }
+    });
+
+    // Keep navigation inside the BrowserWindow (do not open external login windows)
+    win.webContents.on('will-navigate', (event, url) => {
+      // allow navigation within the app window
+    });
+
+    mainWindow = win;
+    return win;
+  } catch (e) {
+    console.error('createWindow error:', e && e.stack ? e.stack : e);
+    throw e;
   }
-
-  const win = new BrowserWindow(browserWindowOptions);
-
-  // Hide the native menu bar on the window (cross-platform)
-  win.setMenuBarVisibility(false);
-
-  // Load diagrams.net (draw.io) in embed mode to remove its own chrome/menus
-  win.loadURL('https://chatgpt.com/?embed=1');
-
-  // Open links that request a new window (target="_blank" or window.open)
-  // in the user's default browser instead of inside the Electron window.
-  win.webContents.setWindowOpenHandler(({ url }) => {
-    // Use shell.openExternal for all urls that are not our app's URL
-    shell.openExternal(url).catch(() => {});
-    return { action: 'deny' };
-  });
-
-  // Also intercept navigations inside the webContents (single-window links).
-  win.webContents.on('will-navigate', (event, url) => {
-    const current = win.webContents.getURL();
-    // If navigation target differs from current URL, open externally
-    if (url !== current) {
-      event.preventDefault();
-      shell.openExternal(url).catch(() => {});
-    }
-  });
-
-  // Optional: open DevTools for debugging
-  // win.webContents.openDevTools();
 }
 
 app.whenReady().then(() => {
-  // Remove the application menu (prevents default menu showing on Linux/Windows)
-  Menu.setApplicationMenu(null);
+  try {
+    Menu.setApplicationMenu(null);
 
-  // On macOS, set a dock icon. Prefer SVG (vector) fallback, or PNG if provided.
-  const assetsDir = path.join(__dirname, '..', 'assets');
-  const svgIcon = path.join(assetsDir, 'icon.svg');
-  const pngIcon = path.join(assetsDir, 'icon.png');
+    const assetsDir = path.join(__dirname, '..', 'assets');
+    const svgIcon = path.join(assetsDir, 'icon.svg');
+    const pngIcon = path.join(assetsDir, 'icon.png');
 
-  if (process.platform === 'darwin') {
-    if (fs.existsSync(svgIcon)) {
-      const svg = fs.readFileSync(svgIcon, 'utf8');
-      const dataUrl = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
-      try {
-        const img = nativeImage.createFromDataURL(dataUrl);
-        app.dock.setIcon(img);
-      } catch (e) {
-        // ignore if creation fails
-      }
-    } else if (fs.existsSync(pngIcon)) {
-      try {
-        const img = nativeImage.createFromPath(pngIcon);
-        app.dock.setIcon(img);
-      } catch (e) {
-        // ignore
+    if (process.platform === 'darwin') {
+      if (fs.existsSync(svgIcon)) {
+        const svg = fs.readFileSync(svgIcon, 'utf8');
+        const dataUrl = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+        try {
+          const img = nativeImage.createFromDataURL(dataUrl);
+          app.dock.setIcon(img);
+        } catch (e) {
+          // ignore if creation fails
+        }
+      } else if (fs.existsSync(pngIcon)) {
+        try {
+          const img = nativeImage.createFromPath(pngIcon);
+          app.dock.setIcon(img);
+        } catch (e) {
+          // ignore
+        }
       }
     }
-  }
 
-  createWindow();
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
-  });
+    createWindow();
+    app.on('activate', () => {
+      if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    });
+  } catch (e) {
+    console.error('Error in whenReady handler:', e && e.stack ? e.stack : e);
+  }
 });
 
 app.on('window-all-closed', () => {

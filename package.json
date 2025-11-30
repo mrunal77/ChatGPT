@@ -7,10 +7,14 @@
   "scripts": {
     "start": "electron .",
     "pack": "electron-builder --dir",
-    "dist": "electron-builder --publish never"
+    "dist": "electron-builder --publish never",
+    "dist:win": "electron-builder --win --publish never",
+    "dist:linux": "electron-builder --linux --publish never"
   },
   "dependencies": {
-    "electron-store": "^8.2.0"
+    "axios": "^1.13.2",
+    "electron-store": "^8.2.0",
+    "keytar": "^7.9.0"
   },
   "devDependencies": {
     "electron": "^26.6.10",
@@ -29,8 +33,31 @@
       "assets/**/*"
     ],
     "linux": {
-      "target": ["AppImage", "deb"],
+      "target": [
+        "AppImage",
+        "deb",
+        "rpm"
+      ],
       "category": "Utility"
-    }
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "protocols": [
+      {
+        "name": "ChatGPT Electron",
+        "schemes": [
+          "chatgpt-electron"
+        ]
+      }
+    ]
   }
 }
